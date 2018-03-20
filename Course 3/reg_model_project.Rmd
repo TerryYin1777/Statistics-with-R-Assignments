@@ -1,0 +1,266 @@
+---
+title: "Modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(GGally)
+```
+
+### Load data
+```{r load-data}
+load("movies.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+* #### Generabizability
+The data set is comprised of 651 randomly sampled movies produced and released before 2016. As the data set is randomly sampled from movies produced and released before 2016, the statistic result yielded can ve generalized to all the movies produced and released before 2016.
+* #### Causality
+The data is not collected from experiments and thus random assignment is not involved. So, we cannot draw any causality conclusions from our data.
+
+* * *
+
+## Part 2: Research question
+* #### Question Statement
+Is there any association between popularity of a movie and the features of the movie itself. The features include type, genre, runtime, mpaa rating, whether the film nominated or win the picture Oscar, whether there are famous actors or actresses, whether the director is famous, theater released month and year, DVD released month and year?
+* #### Interests
+I'm curious about what features make a movie popular. If a model can be built for prediction, the film studio will be able to make more money by catering audiences tastes. 
+
+* * *
+
+## Part 3: Exploratory data analysis
+* #### Take a look at the structure of data
+```{r}
+str(movies)
+# We have 651 records and 32 variables
+```
+* #### Eliminate the missing values
+```{r}
+movies = na.omit(movies)
+dim(movies)
+# Now we have 619 records and 32 variables
+```
+* #### Association between rating on IMDB and audience score on Rotten Tomato
+```{r}
+ggplot(movies,aes(x = imdb_rating,y = audience_score))+
+  geom_jitter()+
+  stat_smooth(method = "lm")
+cor(movies$imdb_rating,movies$audience_score)
+```
+This plot shows a strong linear relationship between the rating from IMDB and rating from Rotten Tomato. Also the corelation coeffocients is as high as 0.86. To avoid collinearity, we are going to choose only one as the response variable. Since the normal citizens occupies the majority on Rotten Tomato, the "audience_score" will be a more precise indicator for popularity. So, we will choose the audience_score as the response variable.
+
+* #### Audience score and tytle type.
+```{r}
+ggplot(movies,aes(x = title_type,y = audience_score))+
+  geom_boxplot(aes(color = factor(title_type)))
+movies %>% group_by(title_type) %>% summarise(median_score = median(audience_score))
+```
+Here we can see the documentary generally has the highest score with a median of 86. The second is TV movie with a median of 79. The type owns lowest overall score is feature movie with a median of 63.
+
+* #### Audience score and genre
+```{r}
+ggplot(movies,aes(x = genre,y = audience_score))+
+  geom_boxplot(aes(color = factor(genre)))
+movies %>% group_by(genre) %>% summarise(median_score = median(audience_score))
+```
+Here the documentary and musical&performing arts have a high score and the rest are relatively lower than them.
+
+* #### Audience score and runtime
+```{r}
+ggplot(movies,aes(x = runtime,y = audience_score))+
+  geom_jitter()+
+  stat_smooth(method = "lm")
+cor(movies$runtime,movies$audience_score)
+```
+It seems the correlation between runtime and audience_score is not high, with a carrelation coefficients of 0.2. The plot also shows a weak association between them.
+
+* #### Audience score and mpaa rating
+```{r}
+ggplot(movies,aes(x = mpaa_rating,y = audience_score))+
+  geom_boxplot(aes(color = factor(mpaa_rating)))
+```
+
+Here the PG-13 has the lowest audience score and Unrated the highest.
+
+* #### Audience score and releasing date
+```{r}
+ggplot(movies,aes(x = thtr_rel_year,y = audience_score))+
+  geom_jitter()+
+  stat_smooth(method = "lm")+
+  labs(title = cor(movies$thtr_rel_year,movies$audience_score))
+ggplot(movies,aes(x = thtr_rel_month,y = audience_score))+
+  geom_jitter()+
+  stat_smooth(method = "lm")+
+  labs(title = cor(movies$thtr_rel_month,movies$audience_score))
+ggplot(movies,aes(x = dvd_rel_year,y = audience_score))+
+  geom_jitter()+
+  stat_smooth(method = "lm")+
+  labs(title = cor(movies$dvd_rel_year,movies$audience_score))
+ggplot(movies,aes(x = dvd_rel_month,y = audience_score))+
+  geom_jitter()+
+  stat_smooth(method = "lm")+
+  labs(title = cor(movies$dvd_rel_month,movies$audience_score))
+
+```
+
+From the plots and correlation coefficients, we can see there is almost no association between audience score and the release time.
+
+* #### Audience score and Oscar best pic 
+```{r}
+# first, we combine the column of best_pic_win and best_pic_nom to make things easier. As long as there is at least one "yes", we regard the movie as with good picture quality.
+best_pic = movies %>% mutate(best_pic = ifelse(best_pic_nom == "yes" | best_pic_win=="yes","yes","no")) %>% select(best_pic,audience_score)
+ggplot(best_pic,aes(x = best_pic,y = audience_score))+
+  geom_boxplot()
+```
+
+From the side by side box plot, the movies with high picture quality are generally higher scored than those don't.
+
+* #### Audience score and famous actors or actresses
+```{r}
+# first, we combine the column of best_actor_win and best_actress_win to denote whether a famous actor or actress is in a movie. As long as there is at least one "yes" among these two columns, we regard the movie is performed by famous actors or actresses
+famous_act = movies %>%  mutate(famous_act = ifelse(best_actor_win == "yes" | best_actress_win=="yes","yes","no")) %>% select(famous_act,audience_score)
+ggplot(famous_act,aes(x = famous_act,y = audience_score))+
+  geom_boxplot()
+```
+
+There is no obvious difference on score whether famous actors or actresses are involved.
+
+* #### Audience score and famous director
+```{r}
+ggplot(movies,aes(x = best_dir_win, y = audience_score))+
+  geom_boxplot()
+```
+
+A comparatively difference shows here on the score between movies directed by famous director and movies not.
+
+
+* * *
+
+## Part 4: Modeling
+* #### Variables Selection
+```{r}
+# First, we select out the columns mentioned above, and mutate the two simplified columns about picture and actor.
+movies = movies %>% select(audience_score,title_type,genre,runtime,mpaa_rating,thtr_rel_year,thtr_rel_month,dvd_rel_year,dvd_rel_month,best_dir_win) 
+movies$best_pic = best_pic$best_pic
+movies$famous_act = famous_act$famous_act
+# From EDA, we already know the releasing time of a movie has nothing to do with the audience score. So we are going to eliminate the four columns about releasing time.
+movies = movies[-6:-9]
+```
+
+Check for collinearity
+```{r}
+ggpairs(movies)
+```
+
+It seems the "best_dir_win", "best_pic" and "famous_act" are collinear with eachother. Here, I will keep the "best_pic" and get rid of the rest.
+```{r}
+movies = movies[c(-6,-8)]
+dim(movies)
+```
+Now we have 619 observations and 6 variables in which one is response variable and the rest are input variables. It's time to build the model.
+
+* #### Variables Selection
+Basically, I will use the backward adjusted R square method to select a multiple linear regression model. The reason is we have five input variables. Backward will make the process more efficient. And I put more emphasis on the accuracy of the model instead of significance of variables. So, I will use the adjusted R squared value as the criteria.
+
+* #### Model Selection
+```{r}
+#Step 1: whole variables
+m_1 = lm(audience_score~.,data = movies)
+summary(m_1)
+```
+The initial adjusted R squared value is 0.2447.
+
+```{r}
+#Step 2: Eliminate one variable. To save the space, I will just demonstrate one in this step.
+m_2 = lm(audience_score~genre+runtime+mpaa_rating+best_pic,data = movies)
+summary(m_2)
+```
+Through this process, I found no further model is better than the initial one on adjusted R squared value. So, I will select the initial model as the final model.
+
+* #### Model Diagnostic
+```{r}
+#(1) linear relationships between runtime and audience_score. To check that we will use a residual plot.
+plot(m_1$residuals~movies$runtime)
+```
+
+The residuals are randomly scattered around 0. This indicates that there is linear relationship between numerical variable "runtime" and the response variable "audience_score". So, the first condition is met.
+
+```{r}
+#(2) Nearly normal residuals with mean 0
+ggplot(m_1,aes(x = .resid))+
+  geom_histogram(binwidth = 10)
+ggplot(m_1,aes(sample = .resid))+
+  stat_qq()
+```
+
+Although the histogram shows there is a little bit left skew for the residual, generally speaking it follows normal distribution. The ormal probability plot indicates the same information. Thus, the second condition is also met.
+
+```{r}
+#(3) Constant variability of residuals
+ggplot(m_1, aes(x = .fitted,y = .resid))+
+  geom_jitter()+
+  geom_hline(yintercept = 0, linetype = "dashed")
+```
+
+It seems a fan shape is appearing in the plot, telling us the variability of residuals is not constant. So, the third condition is not met.
+
+```{r}
+#(4) Independent residuals
+# Since the data is collected from random sample and the sample size is obviously less than 10% of the population, we can conclude that the independent residuals condition is met in our case.
+```
+
+* #### Interpretation of model coefficients
+```{r}
+m_1$coefficients
+```
+runtime: All else held constant, for each one minute increase in runtime, the model predicts the audience score to be higher on average by 0.137 points. 
+
+title_type: All else held constant, the model predicts that feature films score 10.65 points lower than documentary, on average, and that TV movies score 10.60 points lower than documentary, on average.
+
+genre: All else held constant, the model predicts that Animation films score 3.57 points higher than Action & Adventure films on average, that Art house & International films score 14.43 points higher than Action & Adventure films on average, that Commedy films score 0.244 points higher than Action & Adventure films on average, that Documentary films score 18.08 points higher than Action & Adventure films on average, that Drama films score 9.56 points higher than Action & Adventure films on average, that Horror films score 7.47 points lower than Action & Adventure films on average, that Musical & Performing Arts score 20.75 points higher than Action & Adventure films on average, that Mystery & Suspense films score 0.28 points lower than Action & Adventure films on average, that Fiction & Fantasy films score 0.28 points higher than Action & Adventure films on average, and that Other films score 12.14 points higher than Action & Adventure films on average.
+
+mpaa_rating: All else held constant, the model predicts that NC-17 films score 0.70 points lower than G films on average, that PG films score 11.03 points lower than G films on average, that PG-13 films score 16.07 points lower than G films on average, that R films score 10.18 points lower than G films on average, and that Unrated films score 7.77 points lower than G films on average.
+
+best_pic: All else held constant, the model predicts that films with good picture quality score 19.06 points higher than films without good picture quality on average.
+
+Intercept: Action & Adventure, G rating Documentary films with good picture quality and no runtime are expected on average to score 61.44 points.
+
+* * *
+
+## Part 5: Prediction
+* #### Movie information
+```{r}
+# I selected Hacksaw Ridge as the movie whose score to be predicted. The information of the movie is shown on the website of IMDB, http://www.imdb.com/title/tt2119532/?ref_=fn_al_tt_1. Here the title type is Feature Movie, Genre is Drama, runtime is 139, mpaa rating is R, and the picture quality is good since it is nominated on Oscar.
+```
+
+* #### Prediction
+```{r}
+# First, we create a new dataframe to store the information of Hacksaw Ridge.
+hacksaw = data.frame(title_type = "Feature Film", genre = "Drama", runtime = 139, mpaa_rating = "R", best_pic = "yes")
+# Then predict the score with and without interval.
+predict(m_1,hacksaw, interval = "prediction",level = 0.95)
+```
+The predicted score of Hacksaw Ridge is 88.78, its audience score on Rotten Tomato is 92, which is quite close to our prediction.
+
+Interpert the interval: We are 95% confident that the true score will fall into the range between 53.56 and 124.01.
+
+* * *
+
+## Part 6: Conclusion
+* #### Conlcusion: There is some association between the popularity(audience score) of a movie and its own features like title type, genre, runtime, mpaa rating and picture quality. And we can predict it by using the model we built earlier. From the model, we found that a G rated Documentary movie talks about Musical & Perforing Art with high picture quality and longer runtime would be most welcomed by the audience.
+* #### Short Coming: The model is not perfect as the adjusted R square value is not high after all. Besides that, the constant variability residuals condition is also not met. So, there must be some flaw in the model and will make the prediction not so plausible.
