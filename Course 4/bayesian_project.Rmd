@@ -1,0 +1,242 @@
+---
+title: "Bayesian modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(BAS)
+library(plyr)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `movies`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+* #### Generabizability
+The data set is comprised of 651 randomly sampled movies produced and released before 2016. As the data set is randomly sampled from movies produced and released before 2016, the statistic result yielded can ve generalized to all the movies produced and released before 2016.
+* #### Causality
+The data is not collected from experiments and thus random assignment is not involved. So, we cannot draw any causality conclusions from our data.
+
+* * *
+
+## Part 2: Data manipulation
+
+* #### Create new variable based on title_type: New variable should be called feature_film with levels yes (movies that are feature films) and no.
+```{r}
+movies = movies %>% mutate(feature_film = ifelse(title_type == "Feature Film","yes","no"))
+```
+
+* #### Create new variable based on genre: New variable should be called drama with levels yes (movies that are dramas) and no.
+```{r}
+movies = movies %>% mutate(drama = ifelse(genre == "Drama","yes","no"))
+```
+
+* #### Create new variable based on mpaa_rating: New variable should be called mpaa_rating_R with levels yes (movies that are R rated) and no.
+```{r}
+movies = movies %>% mutate(mpaa_rating_R = ifelse(mpaa_rating == "R","yes","no"))
+```
+
+* #### Create two new variables based on thtr_rel_month:
+    + New variable called oscar_season with levels yes (if movie is released in November, October, or December) and no.
+    + New variable called summer_season with levels yes (if movie is released in May, June, July, or August) and no.
+```{r}
+movies = movies %>% mutate(oscar_season = ifelse(thtr_rel_month >= 10, "yes","no")) %>% mutate(summer_season = ifelse(thtr_rel_month>=5 & thtr_rel_month<=8, "yes","no"))
+```
+
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+* #### Association between audience_score and feature_film
+```{r}
+#Calculate the median of audience_score in different categories of feature_film
+feature_film_median <- ddply(movies, .(feature_film), summarise, med = median(audience_score))
+feature_film_median
+#Draw the side by side box plot within median label
+ggplot(movies,aes(x = feature_film,y = audience_score))+ 
+  geom_boxplot(aes(color = factor(feature_film)))+
+  geom_text(data = feature_film_median,aes(x = feature_film, y = med,label = med),size = 4,vjust = 1)
+  
+```
+
+Having a median score of 62, the feature films have generally lower audience score than non feature films who have a median score of 85.5 do. However the interquartile range of feature films is larger than  that of non feature films.
+
+
+* #### Association between audience_score and drama
+```{r}
+#Calculate the median of audience_score in films being drama or non drama
+drama_median <- ddply(movies, .(drama), summarise, med = median(audience_score))
+drama_median
+#Draw the side by side box plot within median label
+ggplot(movies,aes(x = drama,y = audience_score))+ 
+  geom_boxplot(aes(color = factor(drama)))+
+  geom_text(data = drama_median,aes(x = drama, y = med,label = med),size = 4,vjust = 1)
+```
+
+The median audience score of drama is 70 while the median audience score of non drama is 61 which is lower than that of drama. And the non drama's interquartile range is larger than that of drama.
+
+
+* #### Association between audience_score and mpaa_rating_R
+```{r}
+#Calculate the median of audience_score in films rating R or not R.
+mpaa_rating_R_median <- ddply(movies, .(mpaa_rating_R), summarise, med = median(audience_score))
+mpaa_rating_R_median
+#Draw the side by side box plot within median label
+ggplot(movies,aes(x = mpaa_rating_R,y = audience_score))+ 
+  geom_boxplot(aes(color = factor(mpaa_rating_R)))+
+  geom_text(data = mpaa_rating_R_median,aes(x = mpaa_rating_R, y = med,label = med),size = 4,vjust = 1)
+```
+
+This plot shows a pretty close result of audience score on both R rating films and other rating films with median of 64 on R films and 65.5 on non R  films.
+
+* #### Association between audience_score and oscar_season
+```{r}
+#Calculate the median of audience_score in films released during oscar season or not.
+oscar_season_median <- ddply(movies, .(oscar_season), summarise, med = median(audience_score))
+oscar_season_median
+#Draw the side by side box plot within median label
+ggplot(movies,aes(x = oscar_season,y = audience_score))+ 
+  geom_boxplot(aes(color = factor(oscar_season)))+
+  geom_text(data = oscar_season_median,aes(x = oscar_season, y = med,label = med),size = 4,vjust = 1)
+```
+
+The films released during oscar season have a median score of 69 while the films released not in oscar season have a median score of 64. It seems the oscar season films own a higher audience score than non oscar season films.
+
+
+* #### Association between audience_score and summer_season
+```{r}
+#Calculate the median of audience_score in films released during summer season or not.
+summer_season_median <- ddply(movies, .(summer_season), summarise, med = median(audience_score))
+summer_season_median
+#Draw the side by side box plot within median label
+ggplot(movies,aes(x = summer_season,y = audience_score))+ 
+  geom_boxplot(aes(color = factor(summer_season)))+
+  geom_text(data = summer_season_median,aes(x = summer_season, y = med,label = med),size = 4,vjust = 1)
+```
+
+There is no obvious difference in audience score between summer season films and other season films within median of 65 and 66.
+* * *
+
+## Part 4: Modeling
+* #### Model Selection
+
+##### Prepare the dataset
+```{r}
+# Reshape the dataset with variables selected
+movies2 = movies %>% select(audience_score, feature_film, drama, runtime, mpaa_rating_R, thtr_rel_year, oscar_season, summer_season, imdb_rating, imdb_num_votes, critics_score, best_pic_nom, best_pic_win, best_actor_win, best_actress_win, best_dir_win, top200_box)
+# Eliminate the na values
+movies_no_na = na.omit(movies2)
+dim(movies_no_na)
+```
+
+Now we have a dataset contains 17 variables and 650 observations.
+
+##### Often, several models are equally plausible and choosing only one ignores the inherent uncertainty involved in choosing the variables to include in the model.  A way to get around this problem is to implement Bayesian model averaging (BMA), in which multiple models are averaged to obtain posteriors of coefficients and predictions from new data. 
+##### So here, I will use Bayesian Model Averaging with a "BIC" prior for the coefficients and a uniform prior for the models since we have no additional information on the model priors.
+```{r}
+bma_movies = bas.lm(audience_score ~ . , data = movies2,
+                   prior = "BIC", 
+                   modelprior = uniform(),
+                   method = "MCMC")
+summary(bma_movies)
+image(bma_movies,rotate = F)
+```
+
+From summary and the plot, we have five models that have the highest posterior probability. The model with highest posterior probability includes three variables, which are "runtime", "imbd_rating", "critics_score". For variables, the variable with highest probability of being included in the model is "imbd_rating". 
+
+
+* #### Model Diagnostic
+To carry out the model diagnostics, we need to look at four plots which will be demonstrated following.
+
+##### The first one is a residual plot.
+```{r}
+plot(bma_movies,which = 1,add.smooth = F)
+```
+
+From this plot, we can see that the residuals are not scattered within a constant variance. As the fitted value get larger, the residuals are tend to converge like a fan shape. So, we can not conclude that the residuals meet the assumption of constant variance.
+
+##### Second, cumulative model probabilities.
+```{r}
+plot(bma_movies,which = 2,add.smooth = F)
+```
+
+This plot gives us a level of cumulative probability as models are added one at a time. The later models make less and less contributions to the cumulative probability, which indicates that their posterior probabilities are smaller and smaller.
+
+##### Third, model size versus the log of marginal likelihood.
+```{r}
+plot(bma_movies,which = 3)
+```
+
+Though hard to recognize, we would say the models with the highest bayes factors or marginal likelihoods have around 6 or 7 predictors. That is not accordance with the most likely model that have 3 predictors we got earlier.
+
+##### Forth, importance of predictors
+```{r}
+plot(bma_movies,which = 4)
+```
+
+The imdb_rating and critics_score have PIPs of over 0.5, suggesting they are significant predictors in predicting audience score. And runtime is also a strong predictor although its PIP doesn't reach 0.5.
+
+* #### Interpretation of model coefficients
+
+##### Let's see the summary information of coefficients.
+```{r}
+movies_coef = coefficients(bma_movies)
+movies_coef
+```
+
+The first column is the posterior mean of the coefficient, or the value that we expect under Bayesian model averaging, which would be used for prediction. The posterior SD, or standard deviation, provides a measure of the variability of the coefficient. And an approximate range of plausible values for each of the coefficients may be attained via the empirical rule, using the mean plus or minus two standard deviations. 
+Last, we have the posterior probability that the coefficient is non-zero. Here, we can see that we are virtually certain that imdb_rating should be included, with a probability approximately 1. We're 89% sure that critics_score should be included. On the other hand, there is a 0.95 probability that the coefficient for top200_box is 0 after adjusting for all of the other variables. 
+
+* * *
+
+## Part 5: Prediction
+* #### Movie information
+```{r}
+# I selected Hacksaw Ridge as the movie whose score to be predicted. The information of the movie is shown on the website of IMDB, http://www.imdb.com/title/tt2119532/?ref_=fn_al_tt_1. 
+```
+
+* #### Prediction
+```{r}
+# create a new dataset for Hacksaw Ridge
+HR = data.frame(audience_score = 0, feature_film = 1, drama = 1, runtime =139, mpaa_rating_R = 1, thtr_rel_year = 2016, oscar_season = 1, summer_season = 0, imdb_rating = 8.2, imdb_num_votes = 217926, critics_score = 87, best_pic_nom = 1, best_pic_win = 0, best_actor_win = 0, best_actress_win = 0, best_dir_win = 0, top200_box = 0)
+
+
+# sum the production of coefficients and newdata, we got the prediction value
+c = coefficients(bma_movies)
+b = c$postmean*HR
+b$audience_score = NULL
+sum(b)
+
+```
+The predicted score is 116 while the actual score is 92. It seems our model is not that accurate and a score of above 116 is not realistic.
+
+
+
+* * *
+
+## Part 6: Conclusion
+In this project, I have learned that Bayesian Statistics is not always efficient in prediction. In our case, the results are overestimating. I will sure look for the reason in my further study why this happened. For now, my point of view is that frequentist linear regression is more efficient and straight forward.
