@@ -1,0 +1,216 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `gss`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+The General Social Survey (GSS) has been monitoring societal change and studying the growing complexity of American society. The GSS gathers data on contemporary American society in order to monitor and explain trends and constants in attitudes, behaviors, and attributes upon topics covering civil liberties, crime and violence, intergroup tolerance, morality, national spending priorities, psychological well-being, social mobility, and stress and traumatic events.
+
+This dataset include records from 1972 to 2012 which is a wide range. In order to draw conclusion about the generalization and causation the dataset may have, we need to take care of some possible changes over the time period the dataset covered.
+
+http://gss.norc.org/Documents/reports/project-reports/PR31%20-%20GSS%20Overview.pdf
+
+Here is a document about the sampling method and target population utlized by GSS. The GSS targets the adult (age 18 and older) household population of the United States. Until 2006, only English-speaking adults were part of the GSS target population. Beginning in 2006, the GSS expanded its target population to include Spanish-speaking adults. GSS randomly takes sample from targeted population and carries out in-person interviews. 
+
+#### Generalization
+From this point, we can draw the conclusion that the insights from the dataset can be generalized to English-speaking adult(18 or older) households in US before 2006 and both English-speaking and Spanish-speaking adult(18 or older) households in US after 2006.
+
+#### Causation
+And since this is an observational dataset that random assignment is not involved, we can only some association results, instead of causation results from it.
+
+
+* * *
+
+## Part 2: Research question
+#### Question Define
+I would like to know is there any association between hours per day watching TV(tvhours) and subjective class identification(class). Further, is there any statistical difference in hours spent on TV per day between different subjective classes.
+
+#### Interests
+As a traditional media, television is becoming a conveyor of meaningless series and junk programs which reduce one's time should be used in thinking and reading. Someone says the higher class an individual belongs to, the less time he/she will spend on television. Thus, I would like to discover the association between TV hours and class identification.
+Besides that, an other reason why I interested in this topic is that once proven there is really some relationship between the class and TV hours, some TV advertising would be able to target more potential customers since some specific class people are more likey to watch TV.
+
+* * *
+
+## Part 3: Exploratory data analysis
+* Filter the class and tvhours to remove the missing values. Noticed there is no information in category "No Class", it is also removed. After that calculate the mean of TVhours for each class.
+```{r}
+gss %>% select(class,tvhours) %>% filter(class!='NA' & class!='No Class' & tvhours!='NA')%>% group_by(class) %>% summarise(mt = mean(tvhours))
+```
+From this result, we can see from the numbers that the lower class averagely spend more than 4 hours on television, which is the highest. As the class getting higher, the mean hour spend on TV daily becomes lower.
+
+
+* Use ggplot to draw a box plot.
+```{r}
+tv_class = gss %>% select(class,tvhours) %>% filter(class!='NA' & class!='No Class' & tvhours!='NA')
+ggplot(tv_class,aes(x = class, y = tvhours))+
+  geom_boxplot()
+```
+
+As expected, the median follows the same order as mean that they are getting lower when class category getting higher. Lower class and middle class seems more variable than working class and upper class in terms of the middle 50% quartile. All of them are right skewed as a result of the extreme outliers.
+
+* * *
+
+## Part 4: Inference
+
+#### Null Hypothesis: 
+The mean hours watching TV per day are the same between different classes.
+
+#### Alternative Hypothesis: 
+Not all the mean hours watching TV per day are the same.(At least one of them is different from one another) 
+
+#### Check conditions
+* Within group independence
+
+    The data is collected from random sampling, and the sample size within each class are all lower than 10% population. Thus, we can say the sampled observations are independent within group.
+    
+* Between group independence
+
+    There is no paired relationship between different classes. So, the groups are also independent between each other. 
+    
+* Approximate normality
+
+First, let's take a look at the histogram of these four classes. 
+```{r}
+tv_class_l = gss %>% select(class,tvhours) %>% filter(class=='Lower Class' & tvhours!='NA')
+ggplot(tv_class_l,aes(x = tvhours))+
+  geom_histogram(binwidth = 1)+
+  labs(title = "Lower Class")
+```
+```{r}
+tv_class_w = gss %>% select(class,tvhours) %>% filter(class=='Working Class' & tvhours!='NA')
+ggplot(tv_class_w,aes(x = tvhours))+
+  geom_histogram(binwidth = 1)+
+  labs(title = "Working Class")
+```
+```{r}
+tv_class_m = gss %>% select(class,tvhours) %>% filter(class=='Middle Class' & tvhours!='NA')
+ggplot(tv_class_m,aes(x = tvhours))+
+  geom_histogram(binwidth = 1)+
+  labs(title = "Middle Class")
+```
+```{r}
+tv_class_u = gss %>% select(class,tvhours) %>% filter(class=='Upper Class' & tvhours!='NA')
+ggplot(tv_class_u,aes(x = tvhours))+
+  geom_histogram(binwidth = 1)+
+  labs(title = "Upper Class")
+```
+
+Although almost all of them are right skewed, the sample sizes are quite large. We can regard them as approximate normal.
+
+* Roughly Equal Variance
+
+Reviewing the side by side box plot in part 3 again, it seems lower and middle class have larger variance than working and upper class do. So, let's take a look at the sample size and standard deviation in each group.
+```{r}
+gss %>% select(class,tvhours) %>% filter(class!='NA' & class!='No Class' & tvhours!='NA') %>% group_by(class) %>% summarise(count = n(),sd = sd(tvhours))
+```
+The sample size of working class and middle class is much larger than that of other two classes. The variance is important since the sample size varies a lot. The standard deviation of lower class and upper class is much larger than that of working class and middle class, indicating that we can not conclude a equal variance among four groups. So, this condition is not met, but I am still going to continue the research.
+
+#### Methods
+The method I would use to test the hypothesis is ANOVA, which means analysis of variance. Ans since we have enough observations, the test will be a theoretical test instead of simulation test. Simulation test is appropriate for small samples, which is not our case. The basic idea of ANOVA is to first partitioning the variability into between group variability and within group variability and claculate the F score from mean square to get a P value. If P value is higher than significance value, we do not reject the null hypothesis. Otherwise we reject the null hypothesis.
+
+If the null hypothesis is rejected, which means at least one of the group is different, I would use multiple comparison to see which pairs of groups are different. For doing that, i will use a modified significance level for each pair and a constant standard error.
+
+#### Code and Output
+Carry out the inference function. We set significance level as 0.05 for here. And alternative must be "greater" in ANOVA.
+```{r}
+source("http://stat.duke.edu/~mc301/R/inference.R")
+inference(y = tv_class$tvhours,x = tv_class$class, est = "mean", type = "ht", alternative = "greater", method = "theoretical", siglevel = 0.05)
+```
+
+We got a very tiny P value which is much smaller than significance level. We will reject the null hypothesis.
+
+#### Interpretation
+By rejecting the null hypothesis, we have convincing evidence that not all groups are the same in the mean. At least one of them is different from one another.
+
+#### Multiple Comparison
+Null hypothesis: mu(1)-mu(2)=0
+
+Alternative hypothesis: mu(1)-mu(2)≠0
+
+1 and 2 here represent either two pairs of groups.To conduct these comparisons, we will need a modified significance level, modified SE and a new degree of freedom. I will introduce the way of getting these one by one.
+
+The modified significance level is calculated by formula alpha(new) = alpha(old)/k(k-1)/2 in which k is the number of group.
+```{r}
+0.05/(4*(4-1)/2)
+```
+The modified significance level is 0.0083
+
+The degree of freedom is the difference of total and between group degree of freedom.
+```{r}
+df = (32875-1)-(4-1)
+df
+```
+
+List the statistics we will need.
+```{r}
+group_stat = gss %>% select(class,tvhours) %>% filter(class!='No Class' & class!='NA' & tvhours!='NA') %>% group_by(class) %>% summarise(count = n(),mean = round(mean(tvhours),2),sd = round(sd(tvhours),2))
+group_stat
+```
+
+The constant standard error is defined by following formula SE = sqrt(MSE/n1+MSE/n2) in which n1 and n2 are the sample size of compared two groups. Here, I will calculate the SE for six pairs of comparisons.(lower and working, lower and middle, lower and upper, working and middle, working and upper, middle and upper) From initial ANOVA, we have already got the MSE, which is 5.44. 
+
+Calculate the SE for each pair
+```{r}
+SE_lower_working = sqrt(5.44/2007+5.44/14959)
+SE_lower_middle = sqrt(5.44/2007+5.44/14804)
+SE_lower_upper = sqrt(5.44/2007+5.44/1105)
+SE_working_middle = sqrt(5.44/14959+5.44/14804)
+SE_working_upper = sqrt(5.44/14959+5.44/1105)
+SE_middle_upper = sqrt(5.44/14804+5.44/1105)
+```
+
+After that calculate the T score for each pair
+```{r}
+T_lower_working = (4.10-3.02)/SE_lower_working
+T_lower_middle = (4.10-2.79)/SE_lower_middle
+T_lower_upper = (4.10-2.57)/SE_lower_upper
+T_working_middle = (3.02-2.79)/SE_working_middle
+T_working_upper = (3.02-2.57)/SE_working_upper
+T_middle_upper = (2.79-2.57)/SE_middle_upper
+```
+
+Finally calculate each P value
+```{r}
+print(2*pt(T_lower_working,df,lower.tail = FALSE))
+print(2*pt(T_lower_middle,df,lower.tail = FALSE))
+print(2*pt(T_lower_upper,df,lower.tail = FALSE))
+print(2*pt(T_working_middle,df,lower.tail = FALSE))
+print(2*pt(T_working_upper,df,lower.tail = FALSE))
+print(2*pt(T_middle_upper,df,lower.tail = FALSE))
+```
+#### interpretation
+Modified significance level is 0.00833. As all of the P value is lower than modified significance level, we would reject the null hypothesis for each of the pairs. That means, each of the pairs are different in mean.
+
+#### Conclusion
+From the result, we can conclude that each pair of identified class is different in the mean hour spent on TV per day. And the time consumption on TV has some association with the self class identification. Maybe people who classify themselves as upper class are likely to spend more time on thinking, reading and learning instead of wasting time on watching TV.
+
+#### Reason why is not included.
+CI is not included since this an ANOVA test, a test to verify difference between multiple groups. CI is mostly used in one variable test or comparison test. Although I did comparison in the later part of the research, the modified significance level is too tiny and not standard. It is not propriate to carry out CI under this situation.
