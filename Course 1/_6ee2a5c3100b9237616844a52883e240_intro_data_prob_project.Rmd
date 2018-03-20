@@ -1,0 +1,114 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `brfss2013`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+**Generabizability:** Since the sample data is collected in a way that all US  states are covered, and that conducted through both the land-line phone and cellular phone, the sample data is a random sample. Thus, any result got from the sample data can be generalized to the population of US residences.
+
+**Causility:** Unlike experienmental design, this is an observational design without any random assignment. So, we can't draw any causility conclusion from analyzing the data.
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:** Would mental health condition positively or negatively correlated with the physical health condition? The significance of this question is that once the positive correlation is proven, although we can't decide who is whose cause, we still have found some direction worthy further study in keeping healthy. And I will use two variables, menthlth and physhlth.
+
+**Research quesion 2:** Would pregnancy condition sharply reduce frequency of unhealthy habits like smoking and taking alcohol? As these activities are harmful to the baby, sustaining these habits during pregnancy may indicate a lack of wareness in health. I will use four variables, sex, smokday2, alcday5, and pregnant.
+
+**Research quesion 3:** Whether single male have higher possibility of suffering from mentally unhealth than married male? I would like to see the relationship between marital situation and mental health condition in male from the real data since I've heard that unmarried male are more likely to have mental problem. I will use four variables, sex, menthlth, marital, and _age80.
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
+button (green button with orange arrow) above. Make sure that your code is visible
+in the project you submit. Delete this note when before you submit your work.
+
+**Research quesion 1:**
+
+```{r}
+#Filter the data and exclude the missing value as well as outliers.
+gmp_brfss2013 = brfss2013 %>% select(menthlth,physhlth)%>% filter(!is.na(menthlth),!is.na(physhlth),menthlth<=30 & menthlth>=0)
+#Plot the result
+ggplot(gmp_brfss2013, aes(x = gmp_brfss2013$menthlth, y = gmp_brfss2013$physhlth))+
+  geom_point()
+
+```
+
+**I suppose there should be some linear relationship between these two variable. From the plot, however, there is no evidence showing the mental and physical health condition are linear correlated.**
+
+
+
+**Research quesion 2:**
+
+```{r}
+#Filter the data and exclude the missing value as well as outliers.
+preghabit_brfss2013 = brfss2013 %>% select(sex,pregnant,smokday2,alcday5) %>% filter(sex == "Female",!is.na(pregnant),!is.na(smokday2),!is.na(alcday5))
+#Regard one with no smoking activity and alcohol drinking in past 30 days as healthy, otherwise unhealthy.
+preghabit_brfss2013 = preghabit_brfss2013 %>%  mutate(habits = ifelse(smokday2 == "Not at all" & alcday5 == 0, "healthy", "unhealthy"))
+#plot the result
+ggplot(preghabit_brfss2013, aes(pregnant, fill = habits))+
+  geom_bar(position = "fill")
+```
+
+
+**From this plot, we can see that the percentage of female with unhealthy habits is greatly decreased once they get pregnant.**
+
+
+
+
+**Research quesion 3:**
+
+```{r}
+#Exclude the missing value. Filter sex and age. Mental health on male individuals under 30 will not be contributed to marital situation.
+maritalmale_brfss2013 = brfss2013 %>% select(sex,marital,menthlth,X_age80) %>% filter(!is.na(menthlth),sex == "Male",menthlth<=30 & menthlth>=0,!is.na(marital), X_age80>=30 & X_age80<=80 )
+#For mental health, I will assign the one who suffer more than 10 days out of past 30 days from unhealthy mental condition as one having mental problem. For marital situation, I will assign the one either married or in unmarried couple as not single.
+maritalmale_brfss2013 = maritalmale_brfss2013 %>% mutate(mentprob = ifelse(menthlth>10,"mental problem","normal")) %>% mutate(singleornot = ifelse(marital == "Married"|marital == "A member of an unmarried couple", "not single","single"))
+#plot the result
+ggplot(maritalmale_brfss2013,aes(singleornot, fill = mentprob ))+
+  geom_bar(position = "fill")
+```
+
+**From the result, we can conclude that single male have a slightly higher possibility of getting mental problems.** 
+**                                                                                                                   **
+
+
+
+
+
+
+
+
+
+
+
